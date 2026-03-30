@@ -8,7 +8,7 @@ export default function SourcesScreen() {
   const { user } = useAuth();
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] = useState(null);
+  const [processingId, setProcessingId] = useState<string | number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchSources = useCallback(async () => {
@@ -34,7 +34,7 @@ export default function SourcesScreen() {
     fetchSources();
   };
 
-  const handleProcess = async (id) => {
+  const handleProcess = async (id: string | number) => {
     setProcessingId(id);
     try {
       await API.post(`/sources/${id}/process`);
@@ -48,7 +48,7 @@ export default function SourcesScreen() {
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = (id: string | number) => {
     Alert.alert(
       "Delete Source",
       "Are you sure you want to delete this source?",
@@ -75,7 +75,7 @@ export default function SourcesScreen() {
     Alert.alert('Create Source', 'This feature is coming to mobile soon. Please use the web dashboard to upload files.');
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'text-green-600 bg-green-50';
       case 'processing': return 'text-blue-600 bg-blue-50';
@@ -84,7 +84,7 @@ export default function SourcesScreen() {
     }
   };
 
-  const getStatusIcon = (status) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed': return <CheckCircle2 size={14} className="text-green-600 mr-1" />;
       case 'processing': return <RefreshCw size={14} className="text-blue-600 mr-1" />;
@@ -92,7 +92,7 @@ export default function SourcesScreen() {
     }
   };
 
-  const renderSourceItem = ({ item }) => (
+  const renderSourceItem = ({ item }: { item: any }) => (
     <View className="bg-white p-4 rounded-xl border border-[#E4E4E7] mb-3 shadow-sm">
       <View className="flex-row items-center justify-between mb-2">
         <View className="flex-row items-center flex-1 pr-2">

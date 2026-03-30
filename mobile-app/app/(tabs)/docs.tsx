@@ -7,7 +7,7 @@ import axios from 'axios';
 const API = 'http://localhost:8000';
 
 export default function DocsScreen() {
-  const [briefs, setBriefs] = useState([]);
+  const [briefs, setBriefs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export default function DocsScreen() {
     fetchBriefs();
   }, []);
 
-  const renderItem = ({ item }) => (
+  const renderItem = ({ item }: { item: any }) => (
     <TouchableOpacity className="flex-row items-center justify-between p-4 mb-3 bg-[#FFFFFF] border border-[#E4E4E7] rounded-xl">
       <View className="flex-1 mr-4">
         <Text className="text-lg font-heading text-[#171717] font-semibold mb-1" numberOfLines={1}>

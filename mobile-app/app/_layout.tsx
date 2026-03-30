@@ -3,6 +3,12 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
+import {
+  JetBrainsMono_300Light,
+  JetBrainsMono_400Regular,
+  JetBrainsMono_500Medium,
+  JetBrainsMono_700Bold
+} from '@expo-google-fonts/jetbrains-mono';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 import '../global.css';
@@ -10,7 +16,7 @@ import '../global.css';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '../src/contexts/AuthContext';
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
+// Prevent the splash screen from auto-hiding before asset loading is complete. 
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
@@ -21,10 +27,10 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   const [loaded] = useFonts({
-    JetBrainsMono_300Light: require('@expo-google-fonts/jetbrains-mono/JetBrainsMono_300Light.ttf'),
-    JetBrainsMono_400Regular: require('@expo-google-fonts/jetbrains-mono/JetBrainsMono_400Regular.ttf'),
-    JetBrainsMono_500Medium: require('@expo-google-fonts/jetbrains-mono/JetBrainsMono_500Medium.ttf'),
-    JetBrainsMono_700Bold: require('@expo-google-fonts/jetbrains-mono/JetBrainsMono_700Bold.ttf'),
+    JetBrainsMono_300Light,
+    JetBrainsMono_400Regular,
+    JetBrainsMono_500Medium,
+    JetBrainsMono_700Bold,
   });
 
   useEffect(() => {
