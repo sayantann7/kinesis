@@ -1,0 +1,51 @@
+# Kinesis Backend - Core Dependencies
+# Install with: pip install -r requirements.txt
+
+# Web Framework
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+python-multipart>=0.0.6
+starlette>=0.27.0
+
+# Database
+motor>=3.3.0
+pymongo>=4.5.0
+
+# Authentication & Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+PyJWT>=2.8.0
+
+# AI/ML
+openai>=1.0.0
+faster-whisper>=1.0.0
+numpy>=1.24.0
+
+# Cloud Storage
+boto3>=1.28.0
+
+# HTTP Client
+requests>=2.31.0
+httpx>=0.24.0
+aiohttp>=3.8.0
+
+# PDF Generation
+fpdf2>=2.7.0
+
+# GitHub Integration
+PyGithub>=2.1.0
+
+# Slack Integration
+slack_sdk>=3.21.0
+
+# MCP Server
+mcp>=1.0.0
+sse-starlette>=1.6.0
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Development (optional)
+pytest>=7.4.0
