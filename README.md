@@ -242,7 +242,8 @@ AWS_SECRET_ACCESS_KEY=your-aws-secret-key
 CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 
 # GitHub Personal Access Token (for exporting specs to GitHub issues)
-GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_SECRET=your_client_secret
 
 # Slack OAuth credentials (for importing Slack channels)
 SLACK_CLIENT_ID=your_slack_client_id

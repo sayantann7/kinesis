@@ -2,15 +2,44 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import { Settings, User, Key, Hash, Github, Cpu, Copy, Check, RefreshCw, Trash2, Eye, EyeOff, Clock, ArrowRight } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { useToast } from '../hooks/use-toast';
 
 export default function SettingsPage() {
   const { user, API } = useAuth();
+  const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [mcpKey, setMcpKey] = useState(null);
   const [mcpLoading, setMcpLoading] = useState(true);
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [mcpActivity, setMcpActivity] = useState([]);
+
+  // Integrations State
+  const [githubStatus, setGithubStatus] = useState({ connected: false, loading: true });
+  const [slackStatus, setSlackStatus] = useState({ connected: false, loading: true });
+
+  useEffect(() => {
+    if (searchParams.get('github_success') !== null) {
+      toast({ title: 'GitHub Connected', description: 'Successfully linked your GitHub account.' });
+      searchParams.delete('github_success');
+      setSearchParams(searchParams, { replace: true });
+    } else if (searchParams.get('github_error') !== null) {
+      toast({ title: 'GitHub Error', description: 'Failed to link GitHub account.', variant: 'destructive' });
+      searchParams.delete('github_error');
+      setSearchParams(searchParams, { replace: true });
+    } else if (searchParams.get('slack_connected') !== null) {
+      toast({ title: 'Slack Connected', description: 'Successfully linked your Slack account.' });
+      searchParams.delete('slack_connected');
+      setSearchParams(searchParams, { replace: true });
+    } else if (searchParams.get('slack_error') !== null) {
+      toast({ title: 'Slack Error', description: 'Failed to link Slack account.', variant: 'destructive' });
+      searchParams.delete('slack_error');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, toast]);
 
   useEffect(() => {
     (async () => {
@@ -23,6 +52,19 @@ export default function SettingsPage() {
         setMcpActivity(actRes.data);
       } catch (e) { console.error(e); }
       finally { setMcpLoading(false); }
+    })();
+
+    // Fetch integrations status
+    (async () => {
+      try {
+        const ghRes = await axios.get(`${API}/github/status`, { withCredentials: true });
+        setGithubStatus({ connected: ghRes.data.connected, loading: false, username: ghRes.data.username });
+      } catch (e) { setGithubStatus({ connected: false, loading: false }); console.error('GitHub status error', e); }
+      
+      try {
+        const slRes = await axios.get(`${API}/slack/status`, { withCredentials: true });
+        setSlackStatus({ connected: slRes.data.connected, loading: false, team_name: slRes.data.team_name });
+      } catch (e) { setSlackStatus({ connected: false, loading: false }); console.error('Slack status error', e); }
     })();
   }, [API]);
 
@@ -43,8 +85,48 @@ export default function SettingsPage() {
 
   const copyKey = () => { navigator.clipboard.writeText(mcpKey.api_key); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
-const mcpUrl = `${process.env.REACT_APP_BACKEND_URL}/api/mcp/sse?api_key=${mcpKey?.api_key || 'YOUR_KEY_HERE'}`;
+  const mcpUrl = `${process.env.REACT_APP_BACKEND_URL}/api/mcp/sse?api_key=${mcpKey?.api_key || 'YOUR_KEY_HERE'}`;
   const cursorConfig = JSON.stringify({ mcpServers: { kinesis: { type: "sse", url: mcpUrl } } }, null, 2);
+
+  const connectGithub = async () => {
+    try {
+      const res = await axios.get(`${API}/github/auth-url`, { withCredentials: true });
+      window.location.href = res.data.url;
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Error', description: 'Failed to start GitHub connection flow.', variant: 'destructive' });
+    }
+  };
+
+  const disconnectGithub = async () => {
+    try {
+      await axios.delete(`${API}/github/disconnect`, { withCredentials: true });
+      setGithubStatus({ ...githubStatus, connected: false, username: null });
+      toast({ title: 'GitHub Disconnected', description: 'Your GitHub account has been disconnected.' });
+    } catch (e) {
+      toast({ title: 'Error', description: 'Could not disconnect GitHub.', variant: 'destructive' });
+    }
+  };
+
+  const connectSlack = async () => {
+    try {
+      const res = await axios.get(`${API}/slack/auth-url`, { withCredentials: true });
+      window.location.href = res.data.url;
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Error', description: 'Failed to start Slack connection flow.', variant: 'destructive' });
+    }
+  };
+
+  const disconnectSlack = async () => {
+    try {
+      await axios.delete(`${API}/slack/disconnect`, { withCredentials: true });
+      setSlackStatus({ ...slackStatus, connected: false, team_name: null });
+      toast({ title: 'Slack Disconnected', description: 'Your Slack account has been disconnected.' });
+    } catch (e) {
+      toast({ title: 'Error', description: 'Could not disconnect Slack.', variant: 'destructive' });
+    }
+  };
 
   return (
     <div data-testid="settings-page" className="p-4 md:p-6 space-y-6">
@@ -54,19 +136,68 @@ const mcpUrl = `${process.env.REACT_APP_BACKEND_URL}/api/mcp/sse?api_key=${mcpKe
       <div className="border border-[#E4E4E7] bg-white shadow-sm">
         <div className="px-4 py-3 border-b border-[#E4E4E7]"><h3 className="text-sm font-heading font-bold text-[#171717] flex items-center gap-2"><User className="w-4 h-4" /> Profile</h3></div>
         <div className="p-4 flex items-center gap-4">
-          {user?.picture ? <img src={user.picture} alt="" className="w-12 h-12 rounded-full" /> : <div className="w-12 h-12 bg-[#E4E4E7] rounded-full" />}
+          {user?.picture ? <img src={user?.picture} alt="" className="w-12 h-12 rounded-full" /> : <div className="w-12 h-12 bg-[#E4E4E7] rounded-full" />}
           <div><p className="text-sm font-mono text-[#171717]">{user?.name}</p><p className="text-xs font-mono text-[#A1A1AA]">{user?.email}</p></div>
         </div>
       </div>
 
-      {/* MCP Integration — MAIN FEATURE */}
+      {/* Integrations */}
+      <div className="border border-[#E4E4E7] bg-white shadow-sm">
+        <div className="px-4 py-3 border-b border-[#E4E4E7]">
+          <h3 className="text-sm font-heading font-bold text-[#171717] flex items-center gap-2"><Settings className="w-4 h-4" /> Integrations</h3>
+        </div>
+        <div className="p-4 space-y-4">
+          
+          {/* GitHub Integration */}
+          <div className="flex items-center justify-between p-3 border border-[#E4E4E7] rounded-sm bg-[#FAFAFA]">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center text-white"><Github className="w-4 h-4" /></div>
+              <div>
+                <p className="text-sm font-heading font-medium text-[#171717]">GitHub</p>
+                <p className="text-[10px] font-mono text-[#A1A1AA]">{githubStatus.connected ? `Connected as ${githubStatus.username || 'user'}` : 'Not connected'}</p>
+              </div>
+            </div>
+            <div>
+              {githubStatus.loading ? (
+                 <div className="text-[10px] font-mono text-[#A1A1AA] animate-pulse">Loading...</div>
+              ) : githubStatus.connected ? (
+                <button onClick={disconnectGithub} className="text-xs font-mono text-red-500 hover:text-red-600 px-3 py-1.5 border border-red-200 rounded-sm hover:bg-red-50 transition-colors">Disconnect</button>
+              ) : (
+                <button onClick={connectGithub} className="text-xs font-mono text-white bg-black hover:bg-gray-800 px-3 py-1.5 rounded-sm transition-colors">Connect</button>
+              )}
+            </div>
+          </div>
+
+          {/* Slack Integration */}
+          <div className="flex items-center justify-between p-3 border border-[#E4E4E7] rounded-sm bg-[#FAFAFA]">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-[#4A154B] flex items-center justify-center text-white"><Hash className="w-4 h-4" /></div>
+              <div>
+                <p className="text-sm font-heading font-medium text-[#171717]">Slack</p>
+                <p className="text-[10px] font-mono text-[#A1A1AA]">{slackStatus.connected ? `Connected (${slackStatus.team_name || 'workspace'})` : 'Not connected'}</p>
+              </div>
+            </div>
+            <div>
+              {slackStatus.loading ? (
+                <div className="text-[10px] font-mono text-[#A1A1AA] animate-pulse">Loading...</div>
+              ) : slackStatus.connected ? (
+                <button onClick={disconnectSlack} className="text-xs font-mono text-red-500 hover:text-red-600 px-3 py-1.5 border border-red-200 rounded-sm hover:bg-red-50 transition-colors">Disconnect</button>
+              ) : (
+                <button onClick={connectSlack} className="text-xs font-mono text-[#4A154B] border border-[#4A154B] hover:bg-[#4A154B]/5 px-3 py-1.5 rounded-sm transition-colors">Connect</button>
+              )}
+            </div>
+          </div>
+          
+        </div>
+      </div>
+
+      {/* MCP Integration */}
       <div className="border-2 border-[#002FA7]/20 bg-white shadow-sm">
         <div className="px-4 py-3 border-b border-[#002FA7]/20 bg-[#002FA7]/5">
           <h3 className="text-sm font-heading font-bold text-[#002FA7] flex items-center gap-2"><Cpu className="w-4 h-4" /> MCP Integration — Cursor Bridge</h3>
           <p className="text-[10px] font-mono text-[#002FA7]/70 mt-0.5">Connect Kinesis to Cursor for bidirectional spec execution</p>
         </div>
         <div className="p-4 space-y-4">
-          {/* API Key */}
           <div>
             <label className="text-xs font-mono text-[#A1A1AA] block mb-1.5">MCP API Key</label>
             {mcpLoading ? <div className="h-10 bg-[#FAFAFA] animate-pulse rounded-sm" /> : mcpKey?.has_key ? (
@@ -85,7 +216,6 @@ const mcpUrl = `${process.env.REACT_APP_BACKEND_URL}/api/mcp/sse?api_key=${mcpKe
             )}
           </div>
 
-          {/* Integration Guide */}
           <div className="border border-[#E4E4E7] bg-[#FAFAFA] p-4 rounded-sm">
             <h4 className="text-xs font-heading font-bold text-[#171717] mb-3 flex items-center gap-2">
               <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[#E0E7FF] text-[#002FA7] text-[10px]">💡</span>
@@ -121,7 +251,6 @@ const mcpUrl = `${process.env.REACT_APP_BACKEND_URL}/api/mcp/sse?api_key=${mcpKe
             </ol>
           </div>
 
-          {/* Available Tools */}
           <div>
             <label className="text-xs font-mono text-[#A1A1AA] block mb-1.5">Available MCP Tools</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -142,7 +271,6 @@ const mcpUrl = `${process.env.REACT_APP_BACKEND_URL}/api/mcp/sse?api_key=${mcpKe
         </div>
       </div>
 
-      {/* MCP Activity Log */}
       {mcpActivity.length > 0 && (
         <div className="border border-[#E4E4E7] bg-white shadow-sm">
           <div className="px-4 py-3 border-b border-[#E4E4E7]"><h3 className="text-sm font-heading font-bold text-[#171717] flex items-center gap-2"><Clock className="w-4 h-4" /> MCP Activity</h3></div>

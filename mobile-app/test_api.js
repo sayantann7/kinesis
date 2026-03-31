@@ -1,0 +1,1 @@
+const axios = require('axios'); async function test() { try { const res = await axios.get('https://api.kinesis.sayantan.space/api/sources', { headers: { 'Authorization': 'Bearer ' + process.env.API_KEY } }); console.log(JSON.stringify(res.data, null, 2)); } catch(e) { console.error(e.message); } } test();
