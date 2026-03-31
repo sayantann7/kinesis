@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, ActivityIndicator, SafeAreaView, RefreshControl } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import { Lightbulb, TrendingUp, TrendingDown, Minus } from 'lucide-react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -111,7 +112,7 @@ export default function TriageScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#FAFAFA]">
+    <SafeAreaView className="flex-1 bg-[#FAFAFA]" edges={['top']}>
       <View className="px-4 py-6 border-b border-[#E4E4E7] bg-white">
         <View className="flex-row items-center gap-2 mb-1">
           <Lightbulb size={24} color="#000" />
@@ -133,7 +134,7 @@ export default function TriageScreen() {
           data={insights}
           keyExtractor={(item, index) => item.insight_id?.toString() || index.toString()}
           renderItem={renderItem}
-          contentContainerClassName="p-4"
+          contentContainerStyle={{ padding: 16 }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }

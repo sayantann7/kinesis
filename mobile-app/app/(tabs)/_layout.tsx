@@ -60,6 +60,20 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <FileText size={28} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="briefs/[id]"
+        options={{
+          href: null,
+          tabBarStyle: { display: 'none' }
+        }}
+      />
+      <Tabs.Screen
+        name="specs/[id]"
+        options={{
+          href: null,
+          tabBarStyle: { display: 'none' }
+        }}
+      />
     </Tabs>
   );
 }

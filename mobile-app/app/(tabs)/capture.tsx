@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, ActivityIndicator, FlatList, Alert } from 'react-native';
-import { Database, Plus, RefreshCw, Trash2, FileText, Cpu, CheckCircle2, Clock } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Database, Plus, RefreshCw, Trash2, FileText, Cpu, CheckCircle, Clock } from 'lucide-react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
-import API from '../../src/api/apiClient';
+import axios from 'axios';
+import * as DocumentPicker from 'expo-document-picker';
 
 export default function SourcesScreen() {
-  const { user } = useAuth();
+  const { user, API } = useAuth();
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | number | null>(null);
@@ -13,8 +15,8 @@ export default function SourcesScreen() {
 
   const fetchSources = useCallback(async () => {
     try {
-      const res = await API.get('/sources');
-      setSources(res.data);
+      const res = await axios.get(`${API}/sources`);
+      console.log("SOURCES:", JSON.stringify(res.data)); setSources(Array.isArray(res.data) ? res.data : (res.data?.sources || []));
     } catch (err) {
       console.error('Failed to fetch sources:', err);
     } finally {
@@ -37,7 +39,7 @@ export default function SourcesScreen() {
   const handleProcess = async (id: string | number) => {
     setProcessingId(id);
     try {
-      await API.post(`/sources/${id}/process`);
+      await axios.post(`${API}/sources/${id}/process`);
       Alert.alert('Success', 'Source processing started');
       fetchSources();
     } catch (err) {
@@ -59,7 +61,7 @@ export default function SourcesScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await API.delete(`/sources/${id}`);
+              await axios.delete(`${API}/sources/${id}`);
               fetchSources();
             } catch (err) {
               console.error(err);
@@ -71,8 +73,85 @@ export default function SourcesScreen() {
     );
   };
 
-  const handleCreateSource = () => {
-    Alert.alert('Create Source', 'This feature is coming to mobile soon. Please use the web dashboard to upload files.');
+  const handleCreateSource = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      setLoading(true);
+      const file = result.assets[0];
+
+      // 1. Create a generic source for this upload
+      const sourceRes = await axios.post(`${API}/sources`, { 
+        name: file.name, 
+        type: "UPLOAD" 
+      });
+      const sourceId = sourceRes.data.source_id;
+
+      // 2. Upload file to /upload
+      const formData = new FormData();
+      formData.append('file', {
+        uri: file.uri,
+        name: file.name,
+        type: file.mimeType || 'application/octet-stream',
+      } as any);
+
+      const uploadRes = await axios.post(`${API}/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const isAudio = uploadRes.data.is_audio;
+      const transcript = uploadRes.data.transcript;
+      
+      let text = '';
+      if (isAudio) {
+        text = transcript || `[Audio file: ${file.name}]`;
+      } else {
+        if (file.mimeType?.startsWith('text/') || file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
+          try {
+            text = await (await fetch(file.uri)).text();
+          } catch (e) {
+            text = `[Error reading text file: ${file.name}]`;
+          }
+        } else {
+          text = `[Uploaded file: ${file.name}]`;
+        }
+      }
+
+      // 3. Add to source items
+      await axios.post(`${API}/sources/${sourceId}/items`, { 
+        title: file.name, 
+        raw_text: text, 
+        transcript: isAudio ? transcript : text, 
+        metadata: { 
+          filename: file.name, 
+          content_type: file.mimeType, 
+          size: file.size, 
+          file_id: uploadRes.data.file_id, 
+          is_audio: isAudio 
+        } 
+      });
+      
+      if (isAudio && transcript) {
+        Alert.alert('Success', `Audio transcribed successfully!`);
+      } else {
+        Alert.alert('Success', 'File uploaded successfully!');
+      }
+
+      fetchSources();
+    } catch (err) {
+      console.error('File upload err:', err);
+      Alert.alert('Error', 'Failed to upload file');
+      setLoading(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -86,7 +165,7 @@ export default function SourcesScreen() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed': return <CheckCircle2 size={14} className="text-green-600 mr-1" />;
+      case 'completed': return <CheckCircle size={14} className="text-green-600 mr-1" />;
       case 'processing': return <RefreshCw size={14} className="text-blue-600 mr-1" />;
       default: return <Clock size={14} className="text-gray-600 mr-1" />;
     }
@@ -97,11 +176,11 @@ export default function SourcesScreen() {
       <View className="flex-row items-center justify-between mb-2">
         <View className="flex-row items-center flex-1 pr-2">
           <FileText size={18} color="#52525B" className="mr-2" />
-          <Text className="text-[16px] font-semibold text-gray-900" numberOfLines={1}>{item.name}</Text>
+          <Text className="text-[16px] font-semibold text-gray-900" numberOfLines={1}>{item.name || "Untitled Source"}</Text>
         </View>
-        <View className={`flex-row items-center px-2 py-1 rounded-full ${getStatusColor(item.status)}`}>
-          {getStatusIcon(item.status)}
-          <Text className={`text-xs font-medium ${getStatusColor(item.status).split(' ')[0]}`}>
+        <View className={`flex-row items-center px-2 py-1 rounded-full ${getStatusColor(item.status || "pending")}`}>
+          {getStatusIcon(item.status || "pending")}
+          <Text className={`text-xs font-medium ${getStatusColor(item.status || "pending").split(' ')[0]}`}>
             {item.status || 'pending'}
           </Text>
         </View>
@@ -109,33 +188,33 @@ export default function SourcesScreen() {
       
       <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-gray-100">
         <Text className="text-xs text-gray-500">
-          {new Date(item.created_at).toLocaleDateString()}
+          {(item.created_at ? new Date(item.created_at).toLocaleDateString() : "Unknown Date")}
         </Text>
         
         <View className="flex-row items-center space-x-2 gap-2">
           <TouchableOpacity 
-            onPress={() => handleDelete(item.id)}
+            onPress={() => handleDelete(item.source_id)}
             className="p-2 bg-gray-50 rounded-lg border border-gray-200"
           >
             <Trash2 size={16} color="#EF4444" />
           </TouchableOpacity>
           
           <TouchableOpacity 
-            onPress={() => handleProcess(item.id)}
-            disabled={processingId === item.id || item.status === 'processing'}
+            onPress={() => handleProcess(item.source_id)}
+            disabled={processingId === item.source_id || item.status === 'processing'}
             className={`flex-row items-center px-3 py-2 rounded-lg ${
-              processingId === item.id || item.status === 'processing' 
+              processingId === item.source_id || item.status === 'processing' 
                 ? 'bg-gray-100' 
                 : 'bg-black'
             }`}
           >
-            {processingId === item.id ? (
+            {processingId === item.source_id ? (
               <ActivityIndicator size="small" color="#52525B" className="mr-1" />
             ) : (
-              <Cpu size={16} color={processingId === item.id || item.status === 'processing' ? "#52525B" : "#FFFFFF"} className="mr-1" />
+              <Cpu size={16} color={processingId === item.source_id || item.status === 'processing' ? "#52525B" : "#FFFFFF"} className="mr-1" />
             )}
             <Text className={`text-sm font-medium ${
-              processingId === item.id || item.status === 'processing' 
+              processingId === item.source_id || item.status === 'processing' 
                 ? 'text-gray-500' 
                 : 'text-white'
             }`}>
@@ -148,7 +227,7 @@ export default function SourcesScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-[#FAFAFA]">
+    <SafeAreaView className="flex-1 bg-[#FAFAFA]" edges={['top']}>
       <View className="flex-1 p-5">
         <View className="flex-row justify-between items-center mb-6">
           <View className="flex-row items-center">
@@ -174,7 +253,7 @@ export default function SourcesScreen() {
         ) : (
           <FlatList
             data={sources}
-            keyExtractor={item => item.id.toString()}
+            keyExtractor={(item) => (item.source_id ? item.source_id.toString() : Math.random().toString())}
             renderItem={renderSourceItem}
             contentContainerStyle={{ paddingBottom: 20 }}
             showsVerticalScrollIndicator={false}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import axios from 'axios';
-import { Database, Lightbulb, Target, FileText, ListChecks, ChevronRight, TrendingUp } from 'lucide-react-native';
+import { Database, Lightbulb, Target, FileText, ListChecks, ChevronRight, Settings as SettingsIcon, TerminalSquare } from 'lucide-react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -34,6 +35,7 @@ const StatCard = ({ label, value, icon: Icon, colorHex }: any) => (
 
 export default function DashboardScreen() {
   const { API } = useAuth();
+  const router = useRouter();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -63,12 +65,22 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#FAFAFA]">
-      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
-        <View className="mb-6">
+      <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
+        <View>
           <Text className="text-3xl font-bold tracking-tight text-[#171717]">Command Center</Text>
           <Text className="text-xs font-mono text-[#A1A1AA] mt-1 tracking-wide">Product discovery overview</Text>
         </View>
+        <View className="flex-row gap-x-3">
+          <TouchableOpacity onPress={() => router.push('/cursor')} className="p-2 bg-white border border-[#E4E4E7] rounded-full shadow-sm">
+            <TerminalSquare size={20} color="#171717" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/settings')} className="p-2 bg-white border border-[#E4E4E7] rounded-full shadow-sm">
+            <SettingsIcon size={20} color="#171717" />
+          </TouchableOpacity>
+        </View>
+      </View>
 
+      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>   
         <View className="flex-row flex-wrap justify-between">
           <StatCard label="Knowledge Base" value={s.sources || 0} icon={Database} colorHex="#002FA7" />
           <StatCard label="Items" value={s.source_items || 0} icon={Database} colorHex="#71717A" />
