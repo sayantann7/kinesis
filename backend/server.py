@@ -41,7 +41,8 @@ openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
 
-GITHUB_PAT = os.environ.get('GITHUB_PAT')
+GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID')
+GITHUB_CLIENT_SECRET = os.environ.get('GITHUB_CLIENT_SECRET')
 SLACK_CLIENT_ID = os.environ.get('SLACK_CLIENT_ID')
 SLACK_CLIENT_SECRET = os.environ.get('SLACK_CLIENT_SECRET')
 
@@ -894,11 +895,75 @@ async def export_brief_md(brief_id: str, request: Request):
 
 # ============ GITHUB EXPORT ============
 
+
+@api_router.get("/github/status")
+async def github_status(request: Request):
+    user, ws_id, role = await get_workspace_context(request)
+    conn = await db.github_connections.find_one({"workspace_id": ws_id})
+    return {"connected": bool(conn)}
+
+@api_router.get("/github/auth-url")
+async def github_auth_url(request: Request):
+    user, ws_id, role = await get_workspace_context(request)
+    require_editor(role)
+    if not GITHUB_CLIENT_ID:
+        raise HTTPException(status_code=400, detail="GitHub Client ID not configured")
+    state = f"{ws_id}:{user['user_id']}"
+    url = f"https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&state={state}&scope=repo"
+    return {"url": url}
+
+@api_router.get("/github/callback")
+async def github_callback(request: Request, code: str = None, state: str = None):
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+    if not code or not state:
+        return RedirectResponse(url=f"{frontend_url}/settings?tab=integrations&github_error=missing_params") 
+    
+    parts = state.split(":")
+    if len(parts) != 2:
+        return RedirectResponse(url=f"{frontend_url}/settings?tab=integrations&github_error=invalid_state")
+    ws_id, user_id = parts[0], parts[1]
+
+    resp = requests.post(
+        "https://github.com/login/oauth/access_token",
+        headers={"Accept": "application/json"},
+        data={"client_id": GITHUB_CLIENT_ID, "client_secret": GITHUB_CLIENT_SECRET, "code": code},
+        timeout=15
+    )
+    if resp.status_code != 200:
+        return RedirectResponse(url=f"{frontend_url}/settings?tab=integrations&github_error=token_failed")
+    
+    token_data = resp.json()
+    access_token = token_data.get("access_token")
+    if not access_token:
+        return RedirectResponse(url=f"{frontend_url}/settings?tab=integrations&github_error=no_token")
+
+    await db.github_connections.update_one(
+        {"workspace_id": ws_id},
+        {"$set": {"access_token": access_token}},
+        upsert=True
+    )
+    return RedirectResponse(url=f"{frontend_url}/settings?tab=integrations&github_success=true")
+
+@api_router.delete("/github/disconnect")
+async def github_disconnect(request: Request):
+    user, ws_id, role = await get_workspace_context(request)
+    require_editor(role)
+    await db.github_connections.delete_one({"workspace_id": ws_id})
+    return {"success": True}
+
 @api_router.get("/github/repos")
 async def list_github_repos(request: Request):
-    await get_current_user(request)
-    if not GITHUB_PAT: raise HTTPException(status_code=400, detail="GitHub PAT not configured")
-    resp = requests.get("https://api.github.com/user/repos", headers={"Authorization": f"token {GITHUB_PAT}", "Accept": "application/vnd.github.v3+json"}, params={"per_page": 100, "sort": "updated"}, timeout=15)
+    user, ws_id, role = await get_workspace_context(request)
+    conn = await db.github_connections.find_one({"workspace_id": ws_id})
+    if not conn or not conn.get("access_token"):
+        raise HTTPException(status_code=400, detail="GitHub not connected")
+    
+    resp = requests.get(
+        "https://api.github.com/user/repos",
+        headers={"Authorization": f"token {conn['access_token']}", "Accept": "application/vnd.github.v3+json"},
+        params={"per_page": 100, "sort": "updated"},
+        timeout=15
+    )
     resp.raise_for_status()
     return [{"full_name": r["full_name"], "name": r["name"], "owner": r["owner"]["login"], "private": r["private"], "url": r["html_url"]} for r in resp.json()]
 
@@ -909,22 +974,33 @@ async def github_export(request: Request):
     body = await request.json()
     brief_id, repo = body.get("brief_id"), body.get("repo")
     if not brief_id or not repo: raise HTTPException(status_code=400, detail="brief_id and repo required")
+    
+    conn = await db.github_connections.find_one({"workspace_id": ws_id})
+    if not conn or not conn.get("access_token"):
+        raise HTTPException(status_code=400, detail="GitHub not connected")
+    token = conn["access_token"]
+
     brief = await db.briefs.find_one({"brief_id": brief_id, "workspace_id": ws_id}, {"_id": 0})
     if not brief: raise HTTPException(status_code=404, detail="Not found")
     opp = await db.opportunities.find_one({"opportunity_id": brief["opportunity_id"]}, {"_id": 0})
-    spec, content = brief.get("spec") or {}, brief.get("content") or {}
+    spec, cont = brief.get("spec") or {}, brief.get("content") or {}
     title = opp["title"] if opp else "Feature"
-    main_body = f"## Problem Statement\n{content.get('problem_statement', 'N/A')}\n\n## Success Metrics\n" + "".join(f"- {m}\n" for m in content.get("success_metrics", []))
-    headers = {"Authorization": f"token {GITHUB_PAT}", "Accept": "application/vnd.github.v3+json"}
+    main_body = f"## Problem Statement\n{cont.get('problem_statement', 'N/A')}\n\n## Success Metrics\n" + "".join(f"- {m}\n" for m in cont.get("success_metrics", []))
+    
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    
     resp = requests.post(f"https://api.github.com/repos/{repo}/issues", headers=headers, json={"title": f"[Feature] {title}", "body": main_body, "labels": ["feature"]}, timeout=15)
     resp.raise_for_status()
     main_issue = resp.json()
     issues = [{"number": main_issue["number"], "title": main_issue["title"], "url": main_issue["html_url"], "type": "main"}]
+    
     for t in spec.get("tasks", []):
         r = requests.post(f"https://api.github.com/repos/{repo}/issues", headers=headers, json={"title": t.get("title", "Task"), "body": f"**Priority:** {t.get('priority', 'MEDIUM')}\n\n{t.get('description', '')}\n\nParent: #{main_issue['number']}", "labels": ["task"]}, timeout=15)
         if r.status_code == 201:
             i = r.json(); issues.append({"number": i["number"], "title": i["title"], "url": i["html_url"], "type": "task"})
+            
     return {"issues": issues, "repo": repo}
+
 
 # ============ SLACK ============
 
@@ -962,9 +1038,7 @@ async def slack_callback(request: Request, code: str = None, error: str = None, 
     
     if not data.get("ok"): 
         frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-        return RedirectResponse(url=f"{frontend_url}/sources?slack_error={data.get('error', 'unknown')}")
-    
-    # For OAuth v2, bot token is in 'access_token', user token is in 'authed_user.access_token'
+        return RedirectResponse(url=f"{frontend_url}/settings?tab=integrations&slack_error={data.get('error', 'unknown')}")
     # We need the bot token for bot scopes (channels:read, etc.)
     access_token = data.get('access_token')
     team_name = data.get('team', {}).get('name', '')
@@ -990,7 +1064,7 @@ async def slack_callback(request: Request, code: str = None, error: str = None, 
         logger.info(f"Slack connection saved for workspace {ws_id}")
     
     frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-    return RedirectResponse(url=f"{frontend_url}/sources?slack_connected=true&slack_team={team_name}")
+    return RedirectResponse(url=f"{frontend_url}/settings?tab=integrations&slack_connected=true&slack_team={team_name}")
 
 @api_router.post("/slack/connect")
 async def slack_connect(request: Request):
