@@ -2,7 +2,7 @@ import { Tabs, Redirect } from 'expo-router';
 import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
-import { LayoutDashboard, Mic, Lightbulb, AlignLeft } from 'lucide-react-native';
+import { LayoutDashboard, Database, Lightbulb, Target, FileText } from 'lucide-react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -28,29 +28,36 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
+          title: 'Overview',
           tabBarIcon: ({ color }) => <LayoutDashboard size={28} color={color} />,
         }}
       />
       <Tabs.Screen
         name="capture"
         options={{
-          title: 'Capture',
-          tabBarIcon: ({ color }) => <Mic size={28} color={color} />,
+          title: 'Data',
+          tabBarIcon: ({ color }) => <Database size={28} color={color} />,
         }}
       />
       <Tabs.Screen
         name="triage"
         options={{
-          title: 'Triage',
+          title: 'Findings',
           tabBarIcon: ({ color }) => <Lightbulb size={28} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="ideas"
+        options={{
+          title: 'Ideas',
+          tabBarIcon: ({ color }) => <Target size={28} color={color} />,
         }}
       />
       <Tabs.Screen
         name="docs"
         options={{
-          title: 'Docs',
-          tabBarIcon: ({ color }) => <AlignLeft size={28} color={color} />,
+          title: 'Briefs',
+          tabBarIcon: ({ color }) => <FileText size={28} color={color} />,
         }}
       />
     </Tabs>

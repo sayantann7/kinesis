@@ -153,9 +153,9 @@ export default function SourcesScreen() {
         <View className="flex-row justify-between items-center mb-6">
           <View className="flex-row items-center">
             <Database size={28} color="#000" className="mr-3" />
-            <Text className="text-3xl font-bold text-black tracking-tight">Knowledge Base</Text>
+            <Text className="text-3xl font-bold text-black tracking-tight">Feedback & Data</Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleCreateSource}
             className="bg-black w-10 h-10 rounded-full items-center justify-center shadow-md"
           >
@@ -164,7 +164,7 @@ export default function SourcesScreen() {
         </View>
 
         <Text className="text-gray-500 mb-6 text-base">
-          Manage your source documents, meeting transcripts, and reference materials.
+          Upload your project documentation, meeting transcripts, and Slack messages
         </Text>
 
         {loading ? (

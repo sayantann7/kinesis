@@ -1,106 +1,84 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
-import axios from 'axios';
+import { Database, ArrowRight } from 'lucide-react-native';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  
-  const { login, API } = useAuth();
+  const { login } = useAuth();
   const router = useRouter();
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Please enter both email and password.');
-      return;
-    }
-    
     setIsLoading(true);
-    setError('');
     
     try {
-      // Dummy behavior for local dev testing: 
-      // Replace with your actual authentication endpoint if needed.
-      // const response = await axios.post(`${API}/auth/token`, { username: email, password }, {
-      //   headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-      // });
-      
       // Simulate network request
       await new Promise(resolve => setTimeout(resolve, 600));
       
-      const dummyUser = { email, token: 'dummy_token_123' };
+      const dummyUser = { email: 'test@example.com', token: 'dummy' };
       login(dummyUser);
       router.replace('/(tabs)');
       
     } catch (err) {
-      setError('Invalid credentials or network error.');
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-white"
-    >
-      <View className="flex-1 items-center justify-center px-8">
-        <View className="w-full max-w-sm">
-          <Text className="text-4xl font-bold text-black mb-8 tracking-tight font-[JetBrainsMono_400Regular]">
-            Sign in to Kinesis
-          </Text>
-
-          {error ? (
-            <Text className="text-red-500 mb-4">{error}</Text>
-          ) : null}
-
-          <View className="space-y-4">
-            <View>
-              <Text className="text-sm font-medium text-gray-700 mb-1.5">Email</Text>
-              <TextInput
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-black focus:border-black focus:ring-1 focus:ring-black transition-colors"
-                placeholder="you@example.com"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                placeholderTextColor="#9ca3af"
-              />
-            </View>
-
-            <View className="mb-6">
-              <Text className="text-sm font-medium text-gray-700 mb-1.5 mt-4">Password</Text>
-              <TextInput
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-black focus:border-black focus:ring-1 focus:ring-black transition-colors"
-                placeholder="••••••••"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                placeholderTextColor="#9ca3af"
-              />
-            </View>
-
-            <TouchableOpacity
-              onPress={handleLogin}
-              disabled={isLoading}
-              className={`w-full bg-black rounded-lg py-4 items-center justify-center ${isLoading ? 'opacity-80' : ''}`}
-              activeOpacity={0.8}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text className="text-white font-semibold text-base font-[JetBrainsMono_400Regular]">
-                  Sign In
-                </Text>
-              )}
-            </TouchableOpacity>
+    <View className="flex-1 bg-[#FAFAFA] justify-center items-center">
+      <View className="bg-white w-11/12 max-w-sm p-6 border border-[#E4E4E7] shadow-sm rounded-lg">
+        {/* Top Header */}
+        <View className="flex-row items-center">
+          <View className="bg-[#002FA7] w-10 h-10 items-center justify-center rounded">
+            <Database color="#FFF" size={20} />
+          </View>
+          <View className="ml-3">
+            <Text className="font-heading font-bold text-xl text-[#171717]">Kinesis</Text>
+            <Text className="text-[10px] font-mono tracking-widest text-[#71717A] uppercase">
+              AI PRODUCT DISCOVERY
+            </Text>
           </View>
         </View>
+
+        {/* Divider */}
+        <View className="border-t border-[#E4E4E7] my-6 pt-6 flex-col">
+          <Text className="font-heading font-bold text-2xl text-[#171717] mb-2">
+            Sign in
+          </Text>
+          <Text className="font-mono text-sm text-[#71717A] mb-6">
+            Transform customer feedback into executable specs for coding agents.
+          </Text>
+
+          {/* Continue with Google button */}
+          <TouchableOpacity
+            onPress={handleLogin}
+            disabled={isLoading}
+            activeOpacity={0.8}
+            className={`bg-[#171717] rounded-md py-3 flex-row items-center justify-center ${isLoading ? 'opacity-80' : ''}`}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <View className="flex-row items-center w-full justify-center px-4 relative">
+                <Text className="text-white font-medium text-base text-center">
+                  Continue with Google
+                </Text>
+                <View className="absolute right-4">
+                  <ArrowRight color="#FFF" size={16} />
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Bottom Text */}
+        <Text className="text-[10px] font-mono text-[#A1A1AA] text-center mt-6 pt-4 border-t border-[#E4E4E7]">
+          From raw feedback to executable specs
+        </Text>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
