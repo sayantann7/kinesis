@@ -1,12 +1,21 @@
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useEffect } from 'react';
-import { Target, ArrowUp, MessageSquare, Plus, X } from 'lucide-react-native';
+import { Target, ArrowUp, MessageSquare, Plus, X, ChevronDown } from 'lucide-react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useRouter } from 'expo-router';
 import axios from 'axios';
+
+const STATUS_OPTIONS = [
+  { id: 'OPEN', label: 'Open', color: '#22c55e' },
+  { id: 'IN_PROGRESS', label: 'In Progress', color: '#f59e0b' },
+  { id: 'COMPLETED', label: 'Completed', color: '#002FA7' },
+  { id: 'DISCARDED', label: 'Discarded', color: '#9ca3af' },
+];
 
 export default function IdeasScreen() {
   const { API } = useAuth();
+  const router = useRouter();
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -16,6 +25,11 @@ export default function IdeasScreen() {
   const [newDesc, setNewDesc] = useState('');
   const [newImpact, setNewImpact] = useState('5');
   const [creating, setCreating] = useState(false);
+  
+  // Status update state
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [selectedOpportunity, setSelectedOpportunity] = useState<any>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const handleCreateIdea = async () => {
     if (!newTitle.trim()) {
@@ -40,6 +54,37 @@ export default function IdeasScreen() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!selectedOpportunity) return;
+    
+    setUpdatingStatus(true);
+    try {
+      await axios.put(`${API}/opportunities/${selectedOpportunity.opportunity_id}`, {
+        status: newStatus
+      });
+      // Update locally for immediate feedback
+      setOpportunities(prev => prev.map(op => 
+        op.opportunity_id === selectedOpportunity.opportunity_id 
+          ? { ...op, status: newStatus } 
+          : op
+      ));
+      setStatusModalVisible(false);
+      setSelectedOpportunity(null);
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      Alert.alert('Error', 'Failed to update status');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const openStatusModal = (opportunity: any, e: any) => {
+    // Prevent navigation when clicking status
+    e.stopPropagation();
+    setSelectedOpportunity(opportunity);
+    setStatusModalVisible(true);
   };
 
   const fetchOpportunities = async () => {
@@ -174,6 +219,7 @@ export default function IdeasScreen() {
                 <TouchableOpacity
                   key={item.opportunity_id}
                   activeOpacity={0.7}
+                  onPress={() => router.push({ pathname: '/opp-detail', params: { id: item.opportunity_id } })}
                   className="bg-white border border-[#E4E4E7] rounded-lg p-4 mb-3"
                 >
                   <View className="flex-row justify-between items-start mb-2">
@@ -194,7 +240,31 @@ export default function IdeasScreen() {
                     </Text>
                   ) : null}
 
-                  <View className="flex-row justify-end items-center mt-auto pt-2">
+                  <View className="flex-row justify-between items-center mt-auto pt-2">
+                    {/* Status badge - tappable */}
+                    <TouchableOpacity 
+                      onPress={(e) => openStatusModal(item, e)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 4,
+                        backgroundColor: STATUS_OPTIONS.find(s => s.id === item.status)?.color + '15' || '#F4F4F5',
+                        borderWidth: 1,
+                        borderColor: STATUS_OPTIONS.find(s => s.id === item.status)?.color || '#E4E4E7',
+                      }}
+                    >
+                      <Text style={{ 
+                        fontSize: 10, 
+                        fontFamily: 'monospace', 
+                        color: STATUS_OPTIONS.find(s => s.id === item.status)?.color || '#71717A' 
+                      }}>
+                        {STATUS_OPTIONS.find(s => s.id === item.status)?.label || item.status}
+                      </Text>
+                      <ChevronDown size={12} color={STATUS_OPTIONS.find(s => s.id === item.status)?.color || '#71717A'} style={{ marginLeft: 4 }} />
+                    </TouchableOpacity>
+                    
                     <View className="flex-row items-center border border-[#E4E4E7] px-2 py-1 rounded-full">
                       <MessageSquare size={12} color="#A1A1AA" />
                       <Text className="text-xs text-[#A1A1AA] ml-1 font-mono">
@@ -209,6 +279,65 @@ export default function IdeasScreen() {
         })}
         <View className="h-10" />
       </ScrollView>
+
+      {/* Status Update Modal */}
+      <Modal visible={statusModalVisible} transparent animationType="fade">
+        <TouchableOpacity 
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
+          activeOpacity={1}
+          onPress={() => setStatusModalVisible(false)}
+        >
+          <View style={{ backgroundColor: 'white', borderRadius: 8, width: '80%', padding: 16 }}>
+            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#171717', marginBottom: 12 }}>
+              Update Status
+            </Text>
+            <Text style={{ fontSize: 12, fontFamily: 'monospace', color: '#A1A1AA', marginBottom: 16 }} numberOfLines={1}>
+              {selectedOpportunity?.title}
+            </Text>
+            
+            {STATUS_OPTIONS.map((status) => (
+              <TouchableOpacity
+                key={status.id}
+                onPress={() => handleStatusUpdate(status.id)}
+                disabled={updatingStatus}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: selectedOpportunity?.status === status.id ? status.color : '#E4E4E7',
+                  backgroundColor: selectedOpportunity?.status === status.id ? status.color + '15' : 'white',
+                  borderRadius: 6,
+                  marginBottom: 8,
+                }}
+              >
+                <View style={{ 
+                  width: 12, 
+                  height: 12, 
+                  borderRadius: 6, 
+                  backgroundColor: status.color, 
+                  marginRight: 10 
+                }} />
+                <Text style={{ 
+                  fontSize: 13, 
+                  fontFamily: 'monospace', 
+                  color: selectedOpportunity?.status === status.id ? status.color : '#171717',
+                  flex: 1
+                }}>
+                  {status.label}
+                </Text>
+                {selectedOpportunity?.status === status.id && (
+                  <Text style={{ fontSize: 10, fontFamily: 'monospace', color: status.color }}>Current</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+            
+            {updatingStatus && (
+              <ActivityIndicator size="small" color="#002FA7" style={{ marginTop: 8 }} />
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
     </SafeAreaView>
   );

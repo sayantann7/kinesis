@@ -2,17 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Settings, Hash, ArrowLeft, LogOut, Code } from 'lucide-react-native';
+import { Settings, Hash, ArrowLeft, LogOut, Code, Users, Copy, Eye, EyeOff, RefreshCw, Trash2 } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
 import axios from 'axios';
 import { useAuth } from '../src/contexts/AuthContext';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { API, logout } = useAuth();
+  const { API, logout, currentWorkspace } = useAuth();
   const [loading, setLoading] = useState(true);
   const [ghStatus, setGhStatus] = useState<any>({});
   const [slackStatus, setSlackStatus] = useState<any>({});
   const [mcpKey, setMcpKey] = useState<any>({});
+  const [showMcpKey, setShowMcpKey] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -39,12 +42,47 @@ export default function SettingsScreen() {
   const generateMcp = async () => {
     try {
       setLoading(true);
-      await axios.post(`${API}/mcp/generate-key`);
+      const res = await axios.post(`${API}/mcp/generate-key`);
+      setMcpKey(res.data);
       fetchSettings();
     } catch (e) {
       Alert.alert('Error', 'Failed to generate key');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const revokeMcpKey = async () => {
+    Alert.alert(
+      'Revoke Key',
+      'Are you sure you want to revoke this API key? Cursor integration will stop working.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await axios.delete(`${API}/mcp/revoke-key`);
+              setMcpKey({});
+              fetchSettings();
+            } catch (e) {
+              Alert.alert('Error', 'Failed to revoke key');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const copyMcpKey = async () => {
+    if (mcpKey?.key) {
+      await Clipboard.setStringAsync(mcpKey.key);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 2000);
     }
   };
 
@@ -66,6 +104,23 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView className="flex-1 px-4 py-6" showsVerticalScrollIndicator={false}>
+        
+        {/* Workspace Section */}
+        <Text className="text-sm font-bold tracking-widest text-[#A1A1AA] uppercase mb-4">Workspace</Text>
+        
+        <TouchableOpacity 
+          onPress={() => router.push('/workspace')}
+          className="bg-white rounded-xl border border-[#E4E4E7] p-4 mb-6 shadow-sm flex-row items-center justify-between"
+        >
+          <View className="flex-row items-center">
+            <Users size={20} color="#171717" style={{ marginRight: 8 }} />
+            <View>
+              <Text className="text-base font-bold text-[#171717]">{currentWorkspace?.name || 'Workspace'}</Text>
+              <Text className="text-xs text-[#71717A] font-mono">Manage team & settings</Text>
+            </View>
+          </View>
+          <ArrowLeft size={16} color="#A1A1AA" style={{ transform: [{ rotate: '180deg' }] }} />
+        </TouchableOpacity>
         
         {/* Integrations Section */}
         <Text className="text-sm font-bold tracking-widest text-[#A1A1AA] uppercase mb-4">Integrations</Text>
@@ -116,19 +171,81 @@ export default function SettingsScreen() {
         <Text className="text-sm font-bold tracking-widest text-[#A1A1AA] uppercase mb-4 mt-2">Local Development (MCP)</Text>
         
         <View className="bg-white rounded-xl border border-[#E4E4E7] p-4 mb-8 shadow-sm">
-          <Text className="text-sm font-bold text-[#171717] mb-2">MCP Status</Text>
-          {mcpKey?.has_key ? (
-             <Text className="text-xs text-[#71717A] mb-4">You have an active API key established for Cursor integration.</Text>
-          ) : (
-             <Text className="text-xs text-[#71717A] mb-4">No API key is currently active. Generate one here or on the web dashboard to sync tasks with Cursor IDE.</Text>
-          )}
+          <Text className="text-sm font-bold text-[#171717] mb-2">MCP API Key</Text>
+          {mcpKey?.has_key || mcpKey?.key ? (
+            <>
+              <Text className="text-xs text-[#71717A] mb-3">Use this key to connect Cursor IDE with Kinesis.</Text>
+              
+              {/* Key display */}
+              <View style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                backgroundColor: '#F4F4F5', 
+                borderRadius: 6, 
+                padding: 10,
+                marginBottom: 12 
+              }}>
+                <Text style={{ flex: 1, fontFamily: 'monospace', fontSize: 11, color: '#171717' }}>
+                  {showMcpKey ? (mcpKey.key || '••••••••••••••••') : '••••••••••••••••'}
+                </Text>
+                <TouchableOpacity onPress={() => setShowMcpKey(!showMcpKey)} style={{ marginRight: 8 }}>
+                  {showMcpKey ? <EyeOff size={18} color="#71717A" /> : <Eye size={18} color="#71717A" />}
+                </TouchableOpacity>
+                <TouchableOpacity onPress={copyMcpKey}>
+                  {copiedKey ? (
+                    <Text style={{ fontSize: 10, fontFamily: 'monospace', color: '#16A34A' }}>Copied!</Text>
+                  ) : (
+                    <Copy size={18} color="#71717A" />
+                  )}
+                </TouchableOpacity>
+              </View>
 
-          <TouchableOpacity 
-            onPress={generateMcp} 
-            className="bg-black self-start px-4 py-2 rounded-lg"
-          >
-            <Text className="text-white text-sm font-medium">{mcpKey?.has_key ? 'Regenerate API Key' : 'Generate API Key'}</Text>
-          </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity 
+                  onPress={generateMcp} 
+                  style={{ 
+                    flex: 1, 
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    backgroundColor: '#171717', 
+                    paddingVertical: 10, 
+                    borderRadius: 6 
+                  }}
+                >
+                  <RefreshCw size={14} color="white" />
+                  <Text style={{ color: 'white', fontSize: 12, fontFamily: 'monospace', marginLeft: 6 }}>Regenerate</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={revokeMcpKey} 
+                  style={{ 
+                    flex: 1, 
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    backgroundColor: '#FEF2F2', 
+                    borderWidth: 1,
+                    borderColor: '#FECACA',
+                    paddingVertical: 10, 
+                    borderRadius: 6 
+                  }}
+                >
+                  <Trash2 size={14} color="#DC2626" />
+                  <Text style={{ color: '#DC2626', fontSize: 12, fontFamily: 'monospace', marginLeft: 6 }}>Revoke</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text className="text-xs text-[#71717A] mb-4">No API key active. Generate one to sync tasks with Cursor IDE.</Text>
+              <TouchableOpacity 
+                onPress={generateMcp} 
+                className="bg-black self-start px-4 py-2 rounded-lg"
+              >
+                <Text className="text-white text-sm font-medium">Generate API Key</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         <TouchableOpacity 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, Alert, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Plus, RefreshCw, Trash2, FileText, Cpu, CheckCircle, Clock } from 'lucide-react-native';
+import { Database, Plus, RefreshCw, Trash2, FileText, Cpu, CheckCircle, Clock, Type, X } from 'lucide-react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
 import axios from 'axios';
 import * as DocumentPicker from 'expo-document-picker';
@@ -12,6 +12,15 @@ export default function SourcesScreen() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Text modal state
+  const [showTextModal, setShowTextModal] = useState(false);
+  const [textTitle, setTextTitle] = useState('');
+  const [textContent, setTextContent] = useState('');
+  const [addingText, setAddingText] = useState(false);
+  
+  // Add menu state  
+  const [showAddMenu, setShowAddMenu] = useState(false);
 
   const fetchSources = useCallback(async () => {
     try {
@@ -34,6 +43,42 @@ export default function SourcesScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchSources();
+  };
+
+  const handleAddText = async () => {
+    if (!textTitle.trim() || !textContent.trim()) {
+      Alert.alert('Error', 'Please enter both title and content');
+      return;
+    }
+    
+    setAddingText(true);
+    try {
+      // Create a text source
+      const sourceRes = await axios.post(`${API}/sources`, {
+        name: textTitle,
+        type: 'TEXT'
+      });
+      const sourceId = sourceRes.data.source_id;
+      
+      // Add text content as item
+      await axios.post(`${API}/sources/${sourceId}/items`, {
+        title: textTitle,
+        raw_text: textContent,
+        transcript: textContent,
+        metadata: { type: 'manual_text', created_at: new Date().toISOString() }
+      });
+      
+      Alert.alert('Success', 'Text content added successfully!');
+      setShowTextModal(false);
+      setTextTitle('');
+      setTextContent('');
+      fetchSources();
+    } catch (err) {
+      console.error('Failed to add text:', err);
+      Alert.alert('Error', 'Failed to add text content');
+    } finally {
+      setAddingText(false);
+    }
   };
 
   const handleProcess = async (id: string | number) => {
@@ -235,7 +280,7 @@ export default function SourcesScreen() {
             <Text className="text-3xl font-bold text-black tracking-tight">Feedback & Data</Text>
           </View>
           <TouchableOpacity
-            onPress={handleCreateSource}
+            onPress={() => setShowAddMenu(true)}
             className="bg-black w-10 h-10 rounded-full items-center justify-center shadow-md"
           >
             <Plus size={24} color="#FFF" />
@@ -267,7 +312,7 @@ export default function SourcesScreen() {
                   Add documents, records, or transcripts to start building your knowledge base.
                 </Text>
                 <TouchableOpacity 
-                  onPress={handleCreateSource}
+                  onPress={() => setShowAddMenu(true)}
                   className="bg-black px-6 py-3 rounded-xl flex-row items-center"
                 >
                   <Plus size={20} color="#FFF" className="mr-2" />
@@ -278,6 +323,130 @@ export default function SourcesScreen() {
           />
         )}
       </View>
+
+      {/* Add Menu Modal */}
+      <Modal visible={showAddMenu} transparent animationType="fade">
+        <TouchableOpacity 
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setShowAddMenu(false)}
+        >
+          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#171717', marginBottom: 16 }}>Add Source</Text>
+            
+            <TouchableOpacity 
+              onPress={() => { setShowAddMenu(false); handleCreateSource(); }}
+              style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                padding: 16, 
+                backgroundColor: '#F4F4F5', 
+                borderRadius: 8, 
+                marginBottom: 12 
+              }}
+            >
+              <FileText size={24} color="#171717" />
+              <View style={{ marginLeft: 16 }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#171717' }}>Upload File</Text>
+                <Text style={{ fontSize: 12, color: '#71717A' }}>Documents, audio, transcripts</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => { setShowAddMenu(false); setShowTextModal(true); }}
+              style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                padding: 16, 
+                backgroundColor: '#F4F4F5', 
+                borderRadius: 8 
+              }}
+            >
+              <Type size={24} color="#171717" />
+              <View style={{ marginLeft: 16 }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#171717' }}>Add Text</Text>
+                <Text style={{ fontSize: 12, color: '#71717A' }}>Paste or type feedback content</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => setShowAddMenu(false)}
+              style={{ marginTop: 16, alignItems: 'center', padding: 12 }}
+            >
+              <Text style={{ fontSize: 14, color: '#71717A' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Text Input Modal */}
+      <Modal visible={showTextModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: 'white', borderRadius: 12, width: '90%', maxHeight: '80%', padding: 20 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#171717' }}>Add Text Content</Text>
+              <TouchableOpacity onPress={() => setShowTextModal(false)}>
+                <X size={24} color="#71717A" />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={{ fontSize: 12, fontFamily: 'monospace', color: '#71717A', marginBottom: 8 }}>Title</Text>
+            <TextInput
+              value={textTitle}
+              onChangeText={setTextTitle}
+              placeholder="E.g., Customer feedback from call"
+              placeholderTextColor="#A1A1AA"
+              style={{
+                borderWidth: 1,
+                borderColor: '#E4E4E7',
+                borderRadius: 6,
+                padding: 12,
+                fontSize: 14,
+                color: '#171717',
+                marginBottom: 16,
+              }}
+            />
+            
+            <Text style={{ fontSize: 12, fontFamily: 'monospace', color: '#71717A', marginBottom: 8 }}>Content</Text>
+            <TextInput
+              value={textContent}
+              onChangeText={setTextContent}
+              placeholder="Paste or type the feedback content here..."
+              placeholderTextColor="#A1A1AA"
+              multiline
+              style={{
+                borderWidth: 1,
+                borderColor: '#E4E4E7',
+                borderRadius: 6,
+                padding: 12,
+                fontSize: 14,
+                color: '#171717',
+                minHeight: 150,
+                maxHeight: 300,
+                textAlignVertical: 'top',
+                marginBottom: 16,
+              }}
+            />
+            
+            <TouchableOpacity
+              onPress={handleAddText}
+              disabled={addingText}
+              style={{
+                backgroundColor: addingText ? '#A1A1AA' : '#171717',
+                padding: 14,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+            >
+              {addingText ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Add Content</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

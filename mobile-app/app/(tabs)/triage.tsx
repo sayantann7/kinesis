@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
-import { Lightbulb, TrendingUp, TrendingDown, Minus } from 'lucide-react-native';
+import { Lightbulb, TrendingUp, TrendingDown, Minus, Filter, X, Sparkles, ChevronDown } from 'lucide-react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { SkeletonList, SkeletonInsight } from '../../components/ui';
+
+const INSIGHT_TYPES = ['ALL', 'COMPLAINT', 'PRAISE', 'FEATURE_REQUEST', 'QUESTION', 'OTHER'];
 
 const InsightTypeTag = ({ type }: { type?: string }) => {
   const bgClasses: Record<string, string> = {
@@ -32,6 +35,33 @@ const InsightTypeTag = ({ type }: { type?: string }) => {
   );
 };
 
+// Filter chip component
+function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: active ? '#002FA7' : '#E4E4E7',
+        backgroundColor: active ? '#EFF6FF' : 'white',
+        marginRight: 8,
+        marginBottom: 8,
+      }}
+    >
+      <Text style={{ 
+        fontSize: 11, 
+        fontFamily: 'monospace', 
+        color: active ? '#002FA7' : '#71717A' 
+      }}>
+        {label.replace('_', ' ')}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 const SentimentIcon = ({ value }: { value: number }) => {
   if (value > 0.2) return <TrendingUp size={12} color="#16a34a" />;
   if (value < -0.2) return <TrendingDown size={12} color="#ef4444" />;
@@ -43,6 +73,34 @@ export default function TriageScreen() {
   const [insights, setInsights] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Filtering state
+  const [selectedType, setSelectedType] = useState('ALL');
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Clustering state
+  const [showClusterModal, setShowClusterModal] = useState(false);
+  const [clusterPrompt, setClusterPrompt] = useState('');
+  const [clustering, setClustering] = useState(false);
+
+  // Extract unique tags from insights
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    insights.forEach(i => {
+      (i.tags || []).forEach((t: string) => tagSet.add(t));
+    });
+    return Array.from(tagSet).sort();
+  }, [insights]);
+
+  // Filter insights
+  const filteredInsights = useMemo(() => {
+    return insights.filter(i => {
+      if (selectedType !== 'ALL' && i.type !== selectedType) return false;
+      if (selectedTag && !(i.tags || []).includes(selectedTag)) return false;
+      return true;
+    });
+  }, [insights, selectedType, selectedTag]);
 
   const fetchInsights = useCallback(async () => {
     try {
@@ -64,6 +122,35 @@ export default function TriageScreen() {
     setRefreshing(true);
     fetchInsights();
   }, [fetchInsights]);
+
+  const handleCluster = async () => {
+    if (!clusterPrompt.trim()) {
+      Alert.alert('Error', 'Please enter a prompt for clustering');
+      return;
+    }
+    
+    setClustering(true);
+    try {
+      await axios.post(`${API}/insights/cluster`, { prompt: clusterPrompt });
+      setShowClusterModal(false);
+      setClusterPrompt('');
+      // Refresh to show any new opportunities created
+      Alert.alert('Success', 'Insights clustered into opportunities. Check the Ideas tab.');
+      fetchInsights();
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to cluster insights');
+    } finally {
+      setClustering(false);
+    }
+  };
+
+  const clearFilters = () => {
+    setSelectedType('ALL');
+    setSelectedTag(null);
+  };
+
+  const hasActiveFilters = selectedType !== 'ALL' || selectedTag !== null;
 
   const renderItem = ({ item }: { item: any }) => {
     const sentimentLabel = item.sentiment > 0.2 ? 'Positive' : item.sentiment < -0.2 ? 'Negative' : 'Neutral';
@@ -113,17 +200,98 @@ export default function TriageScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#FAFAFA]" edges={['top']}>
-      <View className="px-4 py-6 border-b border-[#E4E4E7] bg-white">
-        <View className="flex-row items-center gap-2 mb-1">
-          <Lightbulb size={24} color="#000" />
-          <Text className="font-heading text-2xl font-bold tracking-tight text-[#171717]">
-            Insights & Findings
-          </Text>
+      {/* Header */}
+      <View className="px-4 py-4 border-b border-[#E4E4E7] bg-white">
+        <View className="flex-row items-center justify-between mb-1">
+          <View className="flex-row items-center gap-2">
+            <Lightbulb size={24} color="#000" />
+            <Text className="font-heading text-2xl font-bold tracking-tight text-[#171717]">
+              Insights & Findings
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity
+              onPress={() => setShowFilters(!showFilters)}
+              style={{
+                padding: 8,
+                borderRadius: 4,
+                backgroundColor: hasActiveFilters ? '#EFF6FF' : 'transparent',
+                borderWidth: 1,
+                borderColor: hasActiveFilters ? '#002FA7' : '#E4E4E7',
+                marginRight: 8,
+              }}
+            >
+              <Filter size={18} color={hasActiveFilters ? '#002FA7' : '#71717A'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowClusterModal(true)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: 8,
+                paddingHorizontal: 12,
+                borderRadius: 4,
+                backgroundColor: '#171717',
+              }}
+            >
+              <Sparkles size={14} color="white" />
+              <Text style={{ color: 'white', fontSize: 11, fontFamily: 'monospace', marginLeft: 6 }}>Cluster</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <Text className="text-xs font-mono text-[#A1A1AA] ml-8">
-          {insights.length} insights extracted
+          {filteredInsights.length} of {insights.length} insights
         </Text>
       </View>
+
+      {/* Filters */}
+      {showFilters && (
+        <View style={{ backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#E4E4E7', paddingHorizontal: 16, paddingVertical: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={{ fontSize: 11, fontFamily: 'monospace', color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: 1 }}>
+              Type
+            </Text>
+            {hasActiveFilters && (
+              <TouchableOpacity onPress={clearFilters}>
+                <Text style={{ fontSize: 11, fontFamily: 'monospace', color: '#002FA7' }}>Clear all</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {INSIGHT_TYPES.map(type => (
+              <FilterChip 
+                key={type} 
+                label={type} 
+                active={selectedType === type} 
+                onPress={() => setSelectedType(type)} 
+              />
+            ))}
+          </View>
+          
+          {allTags.length > 0 && (
+            <>
+              <Text style={{ fontSize: 11, fontFamily: 'monospace', color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: 1, marginTop: 12, marginBottom: 8 }}>
+                Tags
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                <FilterChip 
+                  label="All Tags" 
+                  active={selectedTag === null} 
+                  onPress={() => setSelectedTag(null)} 
+                />
+                {allTags.slice(0, 8).map(tag => (
+                  <FilterChip 
+                    key={tag} 
+                    label={tag} 
+                    active={selectedTag === tag} 
+                    onPress={() => setSelectedTag(tag)} 
+                  />
+                ))}
+              </View>
+            </>
+          )}
+        </View>
+      )}
 
       {loading && !refreshing ? (
         <View className="flex-1 justify-center items-center">
@@ -131,7 +299,7 @@ export default function TriageScreen() {
         </View>
       ) : (
         <FlatList
-          data={insights}
+          data={filteredInsights}
           keyExtractor={(item, index) => item.insight_id?.toString() || index.toString()}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16 }}
@@ -141,11 +309,80 @@ export default function TriageScreen() {
           ListEmptyComponent={
             <View className="border border-[#E4E4E7] bg-white p-12 mt-4 items-center shadow-sm rounded-md">
               <Lightbulb size={40} color="#E4E4E7" className="mb-3" />
-              <Text className="text-sm font-mono text-[#A1A1AA]">No insights yet</Text>
+              <Text className="text-sm font-mono text-[#A1A1AA]">
+                {hasActiveFilters ? 'No insights match filters' : 'No insights yet'}
+              </Text>
             </View>
           }
         />
       )}
+
+      {/* Cluster Modal */}
+      <Modal
+        visible={showClusterModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowClusterModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: 'white', borderRadius: 8, width: '90%', maxWidth: 400, padding: 20 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#171717' }}>Group Related Ideas</Text>
+              <TouchableOpacity onPress={() => setShowClusterModal(false)}>
+                <X size={20} color="#71717A" />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={{ fontSize: 12, fontFamily: 'monospace', color: '#71717A', marginBottom: 12 }}>
+              Describe how you want to cluster these insights into opportunities:
+            </Text>
+            
+            <TextInput
+              value={clusterPrompt}
+              onChangeText={setClusterPrompt}
+              placeholder="e.g., Group by user workflow, Group by feature area..."
+              placeholderTextColor="#A1A1AA"
+              multiline
+              style={{
+                borderWidth: 1,
+                borderColor: '#E4E4E7',
+                borderRadius: 4,
+                padding: 12,
+                minHeight: 80,
+                fontSize: 13,
+                fontFamily: 'monospace',
+                color: '#171717',
+                marginBottom: 16,
+              }}
+            />
+            
+            <TouchableOpacity
+              onPress={handleCluster}
+              disabled={clustering}
+              style={{
+                backgroundColor: clustering ? '#A1A1AA' : '#171717',
+                padding: 12,
+                borderRadius: 4,
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              {clustering ? (
+                <>
+                  <ActivityIndicator size="small" color="white" />
+                  <Text style={{ color: 'white', fontFamily: 'monospace', marginLeft: 8 }}>Clustering...</Text>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} color="white" />
+                  <Text style={{ color: 'white', fontFamily: 'monospace', marginLeft: 8 }}>Cluster Insights</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

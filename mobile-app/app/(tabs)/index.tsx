@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import { Database, Lightbulb, Target, FileText, ListChecks, ChevronRight, Settings as SettingsIcon, TerminalSquare } from 'lucide-react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SkeletonStats, SkeletonList, SkeletonInsight, ChatWidget } from '../../components/ui';
 
 const tagStyles: Record<string, { view: string, text: string }> = {
   COMPLAINT: { view: 'bg-red-50 border-red-200', text: 'text-red-600' },
@@ -38,24 +39,44 @@ export default function DashboardScreen() {
   const router = useRouter();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/dashboard/stats`, { withCredentials: true });
+      setStats(res.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [API]);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await axios.get(`${API}/dashboard/stats`, { withCredentials: true });
-        setStats(res.data);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [API]);
+    fetchStats();
+  }, [fetchStats]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchStats();
+  }, [fetchStats]);
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-[#FAFAFA] justify-center items-center">
-        <ActivityIndicator size="large" color="#002FA7" />
+      <SafeAreaView className="flex-1 bg-[#FAFAFA]" edges={['top']}>
+        <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
+          <View>
+            <Text className="text-3xl font-bold tracking-tight text-[#171717]">Command Center</Text>
+            <Text className="text-xs font-mono text-[#A1A1AA] mt-1 tracking-wide">Product discovery overview</Text>
+          </View>
+        </View>
+        <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
+          <SkeletonStats />
+          <View className="border border-[#E4E4E7] bg-white mt-4 shadow-sm mb-8 relative" style={{ borderRadius: 4, padding: 16 }}>
+            <SkeletonList count={3} ItemComponent={SkeletonInsight} />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -80,7 +101,11 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>   
+      <ScrollView 
+        className="flex-1" 
+        contentContainerStyle={{ padding: 16 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >   
         <View className="flex-row flex-wrap justify-between">
           <StatCard label="Knowledge Base" value={s.sources || 0} icon={Database} colorHex="#002FA7" />
           <StatCard label="Items" value={s.source_items || 0} icon={Database} colorHex="#71717A" />
@@ -93,7 +118,7 @@ export default function DashboardScreen() {
         <View className="border border-[#E4E4E7] bg-white mt-4 shadow-sm mb-8 relative">
           <View className="flex-row items-center justify-between px-4 py-3 border-b border-[#E4E4E7]">
             <Text className="text-sm font-bold text-[#171717]">Recent Findings</Text>
-            <TouchableOpacity className="flex-row items-center">
+            <TouchableOpacity className="flex-row items-center" onPress={() => router.push('/(tabs)/triage')}>
               <Text className="text-xs font-mono text-[#002FA7] mr-1">View all</Text>
               <ChevronRight size={12} color="#002FA7" />
             </TouchableOpacity>
@@ -129,6 +154,9 @@ export default function DashboardScreen() {
           </View>
         </View>
       </ScrollView>
+      
+      {/* AI Chat Widget */}
+      <ChatWidget />
     </SafeAreaView>
   );
 }
